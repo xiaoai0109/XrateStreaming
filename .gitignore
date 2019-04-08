@@ -1,0 +1,8 @@
+.cache-tests
+.cache-main
+.idea/
+target/
+bin/
+project/target/
+project/project/
+
