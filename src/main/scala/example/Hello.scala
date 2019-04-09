@@ -1,8 +1,10 @@
 package example
 
-import org.apache.spark.SparkConf
+import org.apache.spark.{ SparkConf, SparkContext }
 import org.apache.spark.streaming.flume.{ FlumeUtils, SparkFlumeEvent }
 import org.apache.spark.streaming.{ Seconds, StreamingContext }
+import org.apache.spark.sql.{ SQLContext, SparkSession }
+import org.apache.spark.sql.functions._
 import java.util.Arrays;
 
 import org.apache.hadoop.hbase.HBaseConfiguration
@@ -12,10 +14,34 @@ import org.apache.hadoop.hbase.util.Bytes
 object Hello extends Greeting with App {
   println(greeting)
   var i = 1
+/*
+  val sparkSession = SparkSession.builder.master("local")
+    .appName("Xrate Streaming").getOrCreate()
+  val sc = sparkSession.sparkContext
+  val sqlContext = sparkSession.sqlContext
+  val ssc = new StreamingContext(sc, Seconds(10)) 
+  val flumeStream = FlumeUtils.createStream(ssc, "127.0.0.1", 9990)
+    
+  import sparkSession.implicits._
+
+  flumeStream.foreachRDD { rdd =>
+  println(rdd.count())  // executed at the driver
+  rdd.foreach { record =>
+    val data = new String(record.event.getBody().array()) 
+    println(data)
+//      val data = """{"name":"Yin","address":{"city":"Columbus","state":"Ohio"}}"""
+//    val df = sqlContext.read.json(Seq(data).toDS)
+//    println(df.show())
+//    df.printSchema()
+  }
+}
+*/
+  
 
   val conf = new SparkConf().setAppName("Xrate Streaming").setMaster("local[2]")
-  val sc = new StreamingContext(conf, Seconds(10))
-  val flumeStream = FlumeUtils.createStream(sc, "127.0.0.1", 9990)
+  val ssc = new StreamingContext(conf, Seconds(10))
+
+  val flumeStream = FlumeUtils.createStream(ssc, "127.0.0.1", 9990)
   flumeStream.foreachRDD(rdd => {
     println(rdd.count())
     rdd.foreach { record =>
@@ -26,8 +52,8 @@ object Hello extends Greeting with App {
     }
   })
 
-  sc.start()
-  sc.awaitTermination()
+  ssc.start()
+  ssc.awaitTermination()
 
   private def predict(xrate: Double) {
     println(xrate)
@@ -42,11 +68,11 @@ object Hello extends Greeting with App {
       case _: Throwable => 0
     }
   }
-  
+
   private def writeToHBase(xrate: Double) {
-    val hConf = new HBaseConfiguration() 
-    val hTable = new HTable(hConf, "sk:test1") 
-    val thePut = new Put(i.toString.getBytes()) 
+    val hConf = new HBaseConfiguration()
+    val hTable = new HTable(hConf, "sk:test1")
+    val thePut = new Put(i.toString.getBytes())
     thePut.addColumn("i".getBytes(), "a".getBytes(), xrate.toString.getBytes())
     hTable.put(thePut)
     i += 1

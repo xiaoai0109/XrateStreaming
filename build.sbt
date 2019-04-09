@@ -13,7 +13,8 @@ lazy val root = (project in file("."))
     libraryDependencies += sparkStreaming,
     libraryDependencies += sparkCore,
     libraryDependencies += hbaseCommon,
-    libraryDependencies += hbaseClient
+    libraryDependencies += hbaseClient,
+    libraryDependencies += sparkSQL
   )
 
 // Uncomment the following for publishing to Sonatype.
