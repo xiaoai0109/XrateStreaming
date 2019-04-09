@@ -3,8 +3,8 @@ package example
 import org.apache.spark.{ SparkConf, SparkContext }
 import org.apache.spark.streaming.flume.{ FlumeUtils, SparkFlumeEvent }
 import org.apache.spark.streaming.{ Seconds, StreamingContext }
-import org.apache.spark.sql.{ SQLContext, SparkSession }
-import org.apache.spark.sql.functions._
+//import org.apache.spark.sql.{ SQLContext, SparkSession }
+//import org.apache.spark.sql.functions._
 import java.util.Arrays;
 
 import org.apache.hadoop.hbase.HBaseConfiguration
@@ -47,8 +47,10 @@ object Hello extends Greeting with App {
     rdd.foreach { record =>
       val data = new String(record.event.getBody().array())
       val xrate = getXrate(data)
-      if (xrate != 0) predict(xrate)
-      writeToHBase(xrate)
+      if (xrate > 0) {
+        predict(xrate)
+        writeToHBase(xrate)
+      }
     }
   })
 

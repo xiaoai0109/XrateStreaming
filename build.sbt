@@ -8,14 +8,17 @@ ThisBuild / organizationName := "example"
 lazy val root = (project in file("."))
   .settings(
     name := "XrateStreaming",
-    libraryDependencies += scalaTest % Test,
+
     libraryDependencies += streamingFlume,
     libraryDependencies += sparkStreaming,
     libraryDependencies += sparkCore,
     libraryDependencies += hbaseCommon,
     libraryDependencies += hbaseClient,
-    libraryDependencies += sparkSQL
+
   )
+  
+      // libraryDependencies += scalaTest % Test,
+      // libraryDependencies += sparkSQL
 
 // Uncomment the following for publishing to Sonatype.
 // See https://www.scala-sbt.org/1.x/docs/Using-Sonatype.html for more detail.
