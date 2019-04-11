@@ -2,7 +2,7 @@ package example
 
 import org.apache.spark.{ SparkConf, SparkContext }
 import org.apache.spark.streaming.flume.{ FlumeUtils, SparkFlumeEvent }
-import org.apache.spark.streaming.{ Seconds, StreamingContext }
+import org.apache.spark.streaming.{ Seconds, Minutes, StreamingContext }
 import org.apache.spark.sql.{ SQLContext, SparkSession }
 import org.apache.spark.sql.functions.{col, udf}
 import java.util.Arrays;
@@ -23,22 +23,22 @@ object Hello extends Greeting with App {
   rootLogger.setLevel(Level.WARN)
   val sc = sparkSession.sparkContext
   val sqlContext = sparkSession.sqlContext
-  val ssc = new StreamingContext(sc, Seconds(10)) 
+  val ssc = new StreamingContext(sc, Minutes(1)) 
   val flumeStream = FlumeUtils.createStream(ssc, "127.0.0.1", 9990)
-//  val win = flumeStream.window(Seconds(30), Seconds(10))
+  val win = flumeStream.window(Minutes(3), Minutes(1))
 
   import sparkSession.implicits._
 
   // win.foreachRDD
-  flumeStream.foreachRDD { rdd =>
-  println(rdd.count())  // executed at the driver
+  win.foreachRDD { rdd =>
+  println("\ncount: " + rdd.count())  // executed at the driver
   rdd.foreach { record =>
     val data = new String(record.event.getBody().array()) 
     println(data)
 //    val data = """{"name":"Yin","address":{"city":"Columbus","state":"Ohio"}}"""
 //    println(df.select(col("address").getItem("state").as("state")).show())
-//    val df = sqlContext.read.json(Seq(data).toDS)
-//    println(df.select(col("RealtimeCurrencyExchangeRate").getItem("5.ExchangeRate").as("xrate")).show())
+    val df = sqlContext.read.json(Seq(data).toDS)
+    println(df.select(col("RealtimeCurrencyExchangeRate").getItem("5.ExchangeRate").as("xrate")).show())
 //    df.printSchema()
   }
 }
@@ -89,5 +89,5 @@ object Hello extends Greeting with App {
 }
 
 trait Greeting {
-  lazy val greeting: String = "hello"
+  lazy val greeting: String = "Start to stream and predict the exchange rate"
 }
