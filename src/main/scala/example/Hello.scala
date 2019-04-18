@@ -29,7 +29,6 @@ object Hello extends Greeting with App {
 
   import sparkSession.implicits._
 
-  // win.foreachRDD
   win.foreachRDD { rdd =>
   println("\ncount: " + rdd.count())  // executed at the driver
   rdd.foreach { record =>
@@ -43,24 +42,6 @@ object Hello extends Greeting with App {
   }
 }
 
-  
-/*
-  val conf = new SparkConf().setAppName("Xrate Streaming").setMaster("local[2]")
-  val ssc = new StreamingContext(conf, Seconds(10))
-
-  val flumeStream = FlumeUtils.createStream(ssc, "127.0.0.1", 9990)
-  flumeStream.foreachRDD(rdd => {
-    println(rdd.count())
-    rdd.foreach { record =>
-      val data = new String(record.event.getBody().array())
-      val xrate = getXrate(data)
-      if (xrate > 0) {
-        predict(xrate)
-        writeToHBase(xrate)
-      }
-    }
-  })
-*/
   ssc.start()
   ssc.awaitTermination()
 
