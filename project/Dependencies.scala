@@ -8,4 +8,5 @@ object Dependencies {
   lazy val hbaseCommon = "org.apache.hbase" % "hbase-common" % "1.2.0" 
   lazy val hbaseClient = "org.apache.hbase" % "hbase-client" % "1.2.0" 
   lazy val sparkSQL = "org.apache.spark" %% "spark-sql" % "2.2.0"
+  lazy val sparkMLlib ="org.apache.spark" %% "spark-mllib" % "2.2.0"
 }
