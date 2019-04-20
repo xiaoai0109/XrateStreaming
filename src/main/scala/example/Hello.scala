@@ -55,7 +55,7 @@ object Hello extends Greeting with App {
   var three = sqlContext.createDataFrame(sc.emptyRDD[Row], schema)
   var oldAddr = sqlContext.createDataFrame(sc.emptyRDD[Row], schema)
   var addResults = sqlContext.createDataFrame(sc.emptyRDD[Row], schema)
-//  var last = sqlContext.createDataFrame(sc.emptyRDD[Row], schema)
+  //  var last = sqlContext.createDataFrame(sc.emptyRDD[Row], schema)
 
   import sparkSession.implicits._
 
@@ -107,7 +107,7 @@ object Hello extends Greeting with App {
       .withColumn("t-1", lag("xrate", 1).over(w))
       .withColumn("t-2", lag("xrate", 2).over(w)).na.drop()
       .withColumn("sentiment", lit(sentmentindex))
-//    addt.show()
+    //    addt.show()
 
     if (!addt.take(1).isEmpty) {
       val assembler = new VectorAssembler()
@@ -115,30 +115,28 @@ object Hello extends Greeting with App {
         .setOutputCol("features")
 
       val vectorised = assembler.transform(addt)
-//      vectorised.show()
+      //      vectorised.show()
 
       val sameModel = LogisticRegressionModel.load("myModelPath")
       val results = sameModel.transform(vectorised)
-//      results.show()
+      //      results.show()
 
       if (!addResults.take(1).isEmpty) {
         oldAddr = addResults
         addResults = results.withColumn("changes", (col("xrate") - col("t-1")) / col("t-1"))
           .withColumn("signal", when(col("prediction") === 1, 1).otherwise(-1))
+          .withColumn("returns", lit(oldAddr.first().getInt(10)) * col("changes") + 1)
+          .withColumn("cumulativeReturns", lit(oldAddr.first().getDouble(12)) * col("returns"))
+        addResults.show()
+        writeToHBase(addResults)
 
-        val last = oldAddr.union(addResults)
-          .withColumn("returns", lag("signal", 1, 0).over(w) * col("changes") + 1)
-          .withColumn("cumulativeReturns", exp(sum(log(col("returns"))).over(w)))
-          
-        last.show()
-        writeToHBase(last.orderBy(desc("datetime")).limit(1))
+        //        writeToHBase(last.orderBy(desc("datetime")).limit(1))
       } else {
         addResults = results.withColumn("changes", (col("xrate") - col("t-1")) / col("t-1"))
           .withColumn("signal", when(col("prediction") === 1, 1).otherwise(-1))
-//        last = addResults
-//          .withColumn("returns", lit(1))
-//          .withColumn("cumulativeReturns", exp(sum(log(col("returns"))).over(w)))
-//          .orderBy(desc("datetime")).limit(1)
+          .withColumn("returns", lit(1))
+          .withColumn("cumulativeReturns", exp(sum(log(col("returns"))).over(w)))
+        addResults.show()
       }
     }
   }
