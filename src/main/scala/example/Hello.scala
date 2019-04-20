@@ -15,10 +15,11 @@ import org.apache.log4j.Level
 import java.util.{ Calendar, Date }
 import java.text.SimpleDateFormat
 import java.time.LocalDate
+import java.sql.Timestamp
 import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.ml.classification.{ LogisticRegression, LogisticRegressionModel }
 
-import org.apache.hadoop.hbase.HBaseConfiguration
+import org.apache.hadoop.hbase.{ HBaseConfiguration, TableName }
 import org.apache.hadoop.hbase.client._
 import org.apache.hadoop.hbase.util.Bytes
 
@@ -27,11 +28,14 @@ object Hello extends Greeting with App {
 
   BasicConfigurator.configure()
   val rootLogger = Logger.getRootLogger()
-  rootLogger.setLevel(Level.WARN)
+  rootLogger.setLevel(Level.ERROR)
 
+  val dateFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
   var sentimentModel: Double = 0.0
   var latestModel: String = ""
   //  getModelData()
+
+  val hConf = HBaseConfiguration.create()
 
   var i = 1
 
@@ -128,9 +132,6 @@ object Hello extends Greeting with App {
           .withColumn("returns", lit(oldAddr.first().getInt(10)) * col("changes") + 1)
           .withColumn("cumulativeReturns", lit(oldAddr.first().getDouble(12)) * col("returns"))
         addResults.show()
-        writeToHBase(addResults)
-
-        //        writeToHBase(last.orderBy(desc("datetime")).limit(1))
       } else {
         addResults = results.withColumn("changes", (col("xrate") - col("t-1")) / col("t-1"))
           .withColumn("signal", when(col("prediction") === 1, 1).otherwise(-1))
@@ -138,6 +139,7 @@ object Hello extends Greeting with App {
           .withColumn("cumulativeReturns", exp(sum(log(col("returns"))).over(w)))
         addResults.show()
       }
+      writeToHBase(addResults)
     }
   }
 
@@ -153,16 +155,21 @@ object Hello extends Greeting with App {
 */
 
     df.foreachPartition { iter =>
-      val hConf = HBaseConfiguration.create()
-      val hTable = new HTable(hConf, "xrate_prediction")
+      val connection = ConnectionFactory.createConnection(hConf)
+      val hTable = connection.getTable(TableName.valueOf("xrate_prediction"))
+      //      val hTable = new HTable(hConf, "xrate_prediction")
       iter.foreach { item =>
-        val rowKey = item.get(0).toString
-        val thePut = new Put(rowKey.getBytes())
+        //        val rowKey = item.get(0).toString
+        val rowKey = dateFormatter.parse(item.get(0).toString).getTime() / 1000
+        val thePut = new Put(rowKey.toString.getBytes())
+        thePut.addColumn("sum".getBytes(), "datetime".getBytes(), item.get(0).toString.getBytes())
         thePut.addColumn("sum".getBytes(), "xrate".getBytes(), item.get(1).toString.getBytes())
+        thePut.addColumn("sum".getBytes(), "changes".getBytes(), item.get(9).toString.getBytes())
         thePut.addColumn("sum".getBytes(), "signal".getBytes(), item.get(10).toString.getBytes())
         thePut.addColumn("sum".getBytes(), "returns".getBytes(), item.get(11).toString.getBytes())
         thePut.addColumn("sum".getBytes(), "cumulativeReturns".getBytes(), item.get(12).toString.getBytes())
         hTable.put(thePut)
+        connection.close()
         println("Write to HBase successfully")
       }
     }
@@ -198,5 +205,5 @@ object Hello extends Greeting with App {
 }
 
 trait Greeting {
-  lazy val greeting: String = "Start to stream and predict the exchange rate"
+  lazy val greeting: String = "Start to stream the exchange rate and predict"
 }
