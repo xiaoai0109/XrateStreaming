@@ -4,7 +4,6 @@ import org.apache.spark.{ SparkConf, SparkContext }
 import org.apache.spark.streaming.flume.{ FlumeUtils, SparkFlumeEvent }
 import org.apache.spark.streaming.{ Seconds, Minutes, StreamingContext }
 import org.apache.spark.sql.{ SQLContext, SparkSession, DataFrame, Row }
-//import org.apache.spark.sql.functions.{ col, udf }
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.{ StructType, StructField, StringType, FloatType, DoubleType, TimestampType }
 import org.apache.spark.sql.expressions.Window
@@ -23,6 +22,8 @@ import org.apache.hadoop.hbase.{ HBaseConfiguration, TableName }
 import org.apache.hadoop.hbase.client._
 import org.apache.hadoop.hbase.util.Bytes
 
+import com.mongodb.spark._
+
 object Hello extends Greeting with App {
   println(greeting)
 
@@ -31,8 +32,9 @@ object Hello extends Greeting with App {
   rootLogger.setLevel(Level.ERROR)
 
   val dateFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-  var sentimentModel: Double = 0.0
-  var latestModel: String = ""
+  var sentimentIndex: Double = _
+  var lrModel: LogisticRegressionModel = _
+  var latestModel: String = _
   //  getModelData()
 
   val hConf = HBaseConfiguration.create()
@@ -40,6 +42,8 @@ object Hello extends Greeting with App {
   var i = 1
 
   val sparkSession = SparkSession.builder.master("local[3]")
+    .config("spark.mongodb.input.uri", "mongodb://localhost/Sentiments.sentiments")
+    .config("spark.mongodb.output.uri", "mongodb://localhost/BloombergNews.news")
     .appName("Xrate Streaming").getOrCreate()
   val sc = sparkSession.sparkContext
   val sqlContext = sparkSession.sqlContext
@@ -49,6 +53,8 @@ object Hello extends Greeting with App {
   //  val win = flumeStream.window(Minutes(3), Minutes(1))
   //    val win = flumeStream.window(Seconds(60), Seconds(20))
 
+  getModelData2()
+  
   val schema = StructType(
     StructField("datetime", StringType, true) ::
       StructField("xrate", DoubleType, true) :: Nil)
@@ -67,7 +73,7 @@ object Hello extends Greeting with App {
     println("\ncount: " + rdd.count()) // executed at the driver
     if (latestModel != LocalDate.now.toString() &&
       Calendar.getInstance().get(Calendar.HOUR_OF_DAY) == 10) {
-      getModelData()
+      getModelData2()
     }
     rdd.foreach { x =>
       val data = new String(x.event.getBody().array())
@@ -105,12 +111,11 @@ object Hello extends Greeting with App {
 
   private def predict(df: DataFrame) {
     val w = Window.partitionBy().orderBy("datetime")
-    val sentmentindex = 0.65
 
     val addt = df
       .withColumn("t-1", lag("xrate", 1).over(w))
       .withColumn("t-2", lag("xrate", 2).over(w)).na.drop()
-      .withColumn("sentiment", lit(sentmentindex))
+      .withColumn("sentiment", lit(sentimentIndex))
     //    addt.show()
 
     if (!addt.take(1).isEmpty) {
@@ -121,8 +126,8 @@ object Hello extends Greeting with App {
       val vectorised = assembler.transform(addt)
       //      vectorised.show()
 
-      val sameModel = LogisticRegressionModel.load("myModelPath")
-      val results = sameModel.transform(vectorised)
+//      val sameModel = LogisticRegressionModel.load("myModelPath")
+      val results = lrModel.transform(vectorised)
       //      results.show()
 
       if (!addResults.take(1).isEmpty) {
@@ -139,8 +144,15 @@ object Hello extends Greeting with App {
           .withColumn("cumulativeReturns", exp(sum(log(col("returns"))).over(w)))
         addResults.show()
       }
-      writeToHBase(addResults)
+      val stored = addResults.select("datetime", "xrate", "changes", "signal", "returns", "cumulativeReturns")
+      stored.show()
+      writeToMongoDB(stored)
+//      writeToHBase(addResults)
     }
+  }
+  
+  private def writeToMongoDB(df: DataFrame) {
+    df.write.format("com.mongodb.spark.sql.DefaultSource").mode("append").option("database","Prediction").option("collection", "prediction").save()
   }
 
   private def writeToHBase(df: DataFrame) {
@@ -175,6 +187,14 @@ object Hello extends Greeting with App {
     }
 
   }
+  
+  private def getModelData2() {
+      val df = MongoSpark.load(sparkSession) 
+      sentimentIndex = df.orderBy(desc("date")).first.getDouble(2)
+      lrModel = LogisticRegressionModel.load("myModelPath")
+      println(sentimentIndex)
+      latestModel = LocalDate.now().toString
+  }
 
   private def getModelData() {
     //    val dateFormatter = new SimpleDateFormat("yyyy-MM-dd")
@@ -190,8 +210,8 @@ object Hello extends Greeting with App {
       val result = hTable.get(theGet)
       val value = Bytes.toString(result.getValue(family.getBytes(), column.getBytes()))
       println("key:" + value)
-      sentimentModel = value.toDouble
-      println("model:" + sentimentModel)
+      sentimentIndex = value.toDouble
+      println("model:" + sentimentIndex)
 
       // TODO: Read Logistic Regression Model from Parquet
 

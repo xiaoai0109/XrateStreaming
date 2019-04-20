@@ -15,8 +15,8 @@ lazy val root = (project in file("."))
     libraryDependencies += hbaseCommon,
     libraryDependencies += hbaseClient,
     libraryDependencies += sparkSQL,
-    libraryDependencies += sparkMLlib
-
+    libraryDependencies += sparkMLlib,
+    libraryDependencies += mongoSparkConnector
   )
   
       // libraryDependencies += scalaTest % Test,

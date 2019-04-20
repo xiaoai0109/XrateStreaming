@@ -863,6 +863,16 @@
       <attribute name="javadoc_location" value="jar:file:/home/cloudera/.ivy2/cache/org.jpmml/pmml-schema/docs/pmml-schema-1.2.15-javadoc.jar!/"/>
     </attributes>
   </classpathentry>
+  <classpathentry sourcepath="/home/cloudera/.ivy2/cache/org.mongodb.spark/mongo-spark-connector_2.11/srcs/mongo-spark-connector_2.11-2.2.6-sources.jar" kind="lib" path="/home/cloudera/.ivy2/cache/org.mongodb.spark/mongo-spark-connector_2.11/jars/mongo-spark-connector_2.11-2.2.6.jar">
+    <attributes>
+      <attribute name="javadoc_location" value="jar:file:/home/cloudera/.ivy2/cache/org.mongodb.spark/mongo-spark-connector_2.11/docs/mongo-spark-connector_2.11-2.2.6-javadoc.jar!/"/>
+    </attributes>
+  </classpathentry>
+  <classpathentry sourcepath="/home/cloudera/.ivy2/cache/org.mongodb/mongo-java-driver/srcs/mongo-java-driver-3.6.4-sources.jar" kind="lib" path="/home/cloudera/.ivy2/cache/org.mongodb/mongo-java-driver/jars/mongo-java-driver-3.6.4.jar">
+    <attributes>
+      <attribute name="javadoc_location" value="jar:file:/home/cloudera/.ivy2/cache/org.mongodb/mongo-java-driver/docs/mongo-java-driver-3.6.4-javadoc.jar!/"/>
+    </attributes>
+  </classpathentry>
   <classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
   <classpathentry kind="output" path="bin"/>
 </classpath>
