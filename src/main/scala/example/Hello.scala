@@ -35,11 +35,6 @@ object Hello extends Greeting with App {
   var sentimentIndex: Double = _
   var lrModel: LogisticRegressionModel = _
   var latestModel: String = _
-  //  getModelData()
-
-  val hConf = HBaseConfiguration.create()
-
-  var i = 1
 
   val sparkSession = SparkSession.builder.master("local[3]")
     .config("spark.mongodb.input.uri", "mongodb://localhost/Sentiments.sentiments")
@@ -47,13 +42,11 @@ object Hello extends Greeting with App {
     .appName("Xrate Streaming").getOrCreate()
   val sc = sparkSession.sparkContext
   val sqlContext = sparkSession.sqlContext
-  //  val ssc = new StreamingContext(sc, Minutes(1))
-  val ssc = new StreamingContext(sc, Seconds(20))
+  val ssc = new StreamingContext(sc, Minutes(1))
+//  val ssc = new StreamingContext(sc, Seconds(20))
   val flumeStream = FlumeUtils.createStream(ssc, "127.0.0.1", 9990)
-  //  val win = flumeStream.window(Minutes(3), Minutes(1))
-  //    val win = flumeStream.window(Seconds(60), Seconds(20))
 
-  getModelData2()
+  getModelData()
   
   val schema = StructType(
     StructField("datetime", StringType, true) ::
@@ -65,45 +58,28 @@ object Hello extends Greeting with App {
   var three = sqlContext.createDataFrame(sc.emptyRDD[Row], schema)
   var oldAddr = sqlContext.createDataFrame(sc.emptyRDD[Row], schema)
   var addResults = sqlContext.createDataFrame(sc.emptyRDD[Row], schema)
-  //  var last = sqlContext.createDataFrame(sc.emptyRDD[Row], schema)
 
   import sparkSession.implicits._
 
   flumeStream.foreachRDD { rdd =>
-    println("\ncount: " + rdd.count()) // executed at the driver
+    println("count: " + rdd.count()) // executed at the driver
     if (latestModel != LocalDate.now.toString() &&
       Calendar.getInstance().get(Calendar.HOUR_OF_DAY) == 10) {
-      getModelData2()
+      getModelData()
     }
     rdd.foreach { x =>
       val data = new String(x.event.getBody().array())
       println(data)
       old1 = one
       one = sqlContext.read.schema(schema).json(Seq(data).toDS)
-
       old2 = two
       two = old1
       three = old2
       val unioned = one.union(two).union(three)
-      unioned.show()
+      //unioned.show()
       predict(unioned)
 
     }
-    /*
-    rdd.foreach { record =>
-      val data = new String(record.event.getBody().array())
-      println(data)
-      //    val data = """{"name":"Yin","address":{"city":"Columbus","state":"Ohio"}}"""
-      //    println(df.select(col("address").getItem("state").as("state")).show())
-      val df = sqlContext.read.json(Seq(data).toDS)
-      //      println(df.show())
-      val xrateDf = df.select(col("Realtime Currency Exchange Rate").getItem("6. Last Refreshed").as("datetime"), col("Realtime Currency Exchange Rate").getItem("5. Exchange Rate").as("xrate"))
-
-      xrateDf.printSchema()
-      xrateDf.show()
-    }
-
-    */
   }
 
   ssc.start()
@@ -116,7 +92,6 @@ object Hello extends Greeting with App {
       .withColumn("t-1", lag("xrate", 1).over(w))
       .withColumn("t-2", lag("xrate", 2).over(w)).na.drop()
       .withColumn("sentiment", lit(sentimentIndex))
-    //    addt.show()
 
     if (!addt.take(1).isEmpty) {
       val assembler = new VectorAssembler()
@@ -124,11 +99,7 @@ object Hello extends Greeting with App {
         .setOutputCol("features")
 
       val vectorised = assembler.transform(addt)
-      //      vectorised.show()
-
-//      val sameModel = LogisticRegressionModel.load("myModelPath")
       val results = lrModel.transform(vectorised)
-      //      results.show()
 
       if (!addResults.take(1).isEmpty) {
         oldAddr = addResults
@@ -136,91 +107,27 @@ object Hello extends Greeting with App {
           .withColumn("signal", when(col("prediction") === 1, 1).otherwise(-1))
           .withColumn("returns", lit(oldAddr.first().getInt(10)) * col("changes") + 1)
           .withColumn("cumulativeReturns", lit(oldAddr.first().getDouble(12)) * col("returns"))
-        addResults.show()
       } else {
         addResults = results.withColumn("changes", (col("xrate") - col("t-1")) / col("t-1"))
           .withColumn("signal", when(col("prediction") === 1, 1).otherwise(-1))
           .withColumn("returns", lit(1))
           .withColumn("cumulativeReturns", exp(sum(log(col("returns"))).over(w)))
-        addResults.show()
       }
       val stored = addResults.select("datetime", "xrate", "changes", "signal", "returns", "cumulativeReturns")
       stored.show()
       writeToMongoDB(stored)
-//      writeToHBase(addResults)
     }
   }
   
   private def writeToMongoDB(df: DataFrame) {
     df.write.format("com.mongodb.spark.sql.DefaultSource").mode("append").option("database","Prediction").option("collection", "prediction").save()
   }
-
-  private def writeToHBase(df: DataFrame) {
-    /*
-    val hConf = HBaseConfiguration.create()
-    val hTable = new HTable(hConf, "sk:test1")
-    val thePut = new Put(i.toString.getBytes())
-    thePut.addColumn("i".getBytes(), "a".getBytes(), xrate.toString.getBytes())
-    //    thePut.addColumn("i".getBytes(), "xrate".getBytes(), df.get(0).getBytes())
-    hTable.put(thePut)
-    i += 1
-*/
-
-    df.foreachPartition { iter =>
-      val connection = ConnectionFactory.createConnection(hConf)
-      val hTable = connection.getTable(TableName.valueOf("xrate_prediction"))
-      //      val hTable = new HTable(hConf, "xrate_prediction")
-      iter.foreach { item =>
-        //        val rowKey = item.get(0).toString
-        val rowKey = dateFormatter.parse(item.get(0).toString).getTime() / 1000
-        val thePut = new Put(rowKey.toString.getBytes())
-        thePut.addColumn("sum".getBytes(), "datetime".getBytes(), item.get(0).toString.getBytes())
-        thePut.addColumn("sum".getBytes(), "xrate".getBytes(), item.get(1).toString.getBytes())
-        thePut.addColumn("sum".getBytes(), "changes".getBytes(), item.get(9).toString.getBytes())
-        thePut.addColumn("sum".getBytes(), "signal".getBytes(), item.get(10).toString.getBytes())
-        thePut.addColumn("sum".getBytes(), "returns".getBytes(), item.get(11).toString.getBytes())
-        thePut.addColumn("sum".getBytes(), "cumulativeReturns".getBytes(), item.get(12).toString.getBytes())
-        hTable.put(thePut)
-        connection.close()
-        println("Write to HBase successfully")
-      }
-    }
-
-  }
   
-  private def getModelData2() {
+  private def getModelData() {
       val df = MongoSpark.load(sparkSession) 
       sentimentIndex = df.orderBy(desc("date")).first.getDouble(2)
       lrModel = LogisticRegressionModel.load("myModelPath")
-      println(sentimentIndex)
       latestModel = LocalDate.now().toString
-  }
-
-  private def getModelData() {
-    //    val dateFormatter = new SimpleDateFormat("yyyy-MM-dd")
-    //    val key = dateFormatter.format(new Date())
-    val key = LocalDate.now().toString
-    val family = "sentiment"
-    val column = "model"
-    println(key)
-    try {
-      val hConf = HBaseConfiguration.create()
-      val hTable = new HTable(hConf, "model_data")
-      val theGet = new Get(key.getBytes())
-      val result = hTable.get(theGet)
-      val value = Bytes.toString(result.getValue(family.getBytes(), column.getBytes()))
-      println("key:" + value)
-      sentimentIndex = value.toDouble
-      println("model:" + sentimentIndex)
-
-      // TODO: Read Logistic Regression Model from Parquet
-
-      latestModel = key
-    } catch {
-      case e: Throwable =>
-        println(e.getMessage)
-        println("Cannot get sentiment model of " + key)
-    }
   }
 }
 
